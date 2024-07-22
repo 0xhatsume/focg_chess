@@ -3,9 +3,15 @@ import { createServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 
-// Game Room Model
+interface Player {
+    id: string;
+    name: string;
+    // Add more profile information as needed
+}
+
 interface GameRoom {
     id: string;
+    name: string;
     players: string[];
     spectators: string[];
 }
@@ -24,37 +30,36 @@ const rooms: Record<string, GameRoom> = {};
 io.on('connection', (socket: Socket) => {
     console.log('A user connected');
 
-    // create new room
-    socket.on('createRoom', () => {
+  // Send the initial room list to the newly connected client
+    socket.emit('roomList', Object.values(rooms));
+    socket.on('createRoom', (roomName: string) => {
+        
         const roomId = uuidv4();
-        rooms[roomId] = { id: roomId, players: [], spectators: [] };
+        
+        rooms[roomId] = { id: roomId, name: roomName, players: [], spectators: [] };
+        
         socket.join(roomId);
+        
         socket.emit('roomCreated', roomId);
+        io.emit('roomList', Object.values(rooms));
     });
 
-    // join room
-    // start game if there are 2 players
     socket.on('joinRoom', (roomId: string) => {
         const room = rooms[roomId];
         if (room) {
-
-            // Start Room if there are 2 players
             if (room.players.length < 2) {
-                room.players.push(socket.id); // player tracked by socket id
+                room.players.push(socket.id);
                 socket.join(roomId);
                 socket.emit('joinedRoom', roomId);
-
                 if (room.players.length === 2) {
-                    io.to(roomId).emit('gameStart', 
-                        { white: room.players[0], black: room.players[1] }
-                    );
+                    io.to(roomId).emit('gameStart', { white: room.players[0], black: room.players[1] });
                 }
-
             } else {
                 room.spectators.push(socket.id);
                 socket.join(roomId);
                 socket.emit('joinedAsSpectator', roomId);
             }
+                io.emit('roomList', Object.values(rooms));
         } else {
             socket.emit('roomNotFound');
         }
@@ -66,34 +71,24 @@ io.on('connection', (socket: Socket) => {
 
     socket.on('disconnect', () => {
         console.log('User disconnected');
-        
-        // looping through rooms to find room Id
         for (const roomId in rooms) {
-            
             const room = rooms[roomId];
             const playerIndex = room.players.indexOf(socket.id);
-            
             if (playerIndex !== -1) {
-
                 room.players.splice(playerIndex, 1);
                 io.to(roomId).emit('playerLeft', socket.id);
-
-                if (room.players.length === 0 && room.spectators.length === 0) 
-                {
-                    delete rooms[roomId];
+                if (room.players.length === 0 && room.spectators.length === 0) {
+                delete rooms[roomId];
                 }
-
             } else {
-
                 const spectatorIndex = room.spectators.indexOf(socket.id);
-                
                 if (spectatorIndex !== -1) {
-                    room.spectators.splice(spectatorIndex, 1);
+                room.spectators.splice(spectatorIndex, 1);
                 }
-
             }
-        }
-    });
+            }
+            io.emit('roomList', Object.values(rooms));
+        });
 });
 
 const PORT = 3001;
