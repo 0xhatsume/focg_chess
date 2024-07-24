@@ -64,20 +64,25 @@ io.on('connection', (socket: Socket) => {
         
         playerNames[socket.id] = playerName;
         socket.join(roomId);
-        socket.emit('roomCreated', roomId);
+        socket.emit('roomCreated', { roomId, player });
         emitUpdatedRoomList();
     });
 
     socket.on('joinRoom', ({ roomId, playerName }) => {
         const room = rooms[roomId];
         if (room) {
-            if (room.players.length < 2) {
+            const existingPlayer = room.players.find(p => p.id === socket.id || p.name === playerName);
+            if (existingPlayer) {
+                // Player is already in the room, just re-join the socket room
+                socket.join(roomId);
+                socket.emit('playerJoined', { roomId, players: room.players });
+            } else if (room.players.length < 2) {
                 const color = room.players[0].color === 'white' ? 'black' : 'white';
                 const player: Player = { id: socket.id, name: playerName, color };
                 room.players.push(player);
                 playerNames[socket.id] = playerName;
                 socket.join(roomId);
-                io.to(roomId).emit('joinedRoom', { roomId, players: room.players });
+                io.to(roomId).emit('playerJoined', { roomId, players: room.players });
                 if (room.players.length === 2) {
                     io.to(roomId).emit('gameStart', { 
                         white: room.players.find(p => p.color === 'white')!.name, 
@@ -88,7 +93,7 @@ io.on('connection', (socket: Socket) => {
                 // Join as spectator
                 playerNames[socket.id] = playerName;
                 socket.join(roomId);
-                socket.emit('joinedRoom', { roomId, players: room.players });
+                socket.emit('joinedAsSpectator', { roomId, players: room.players });
             }
             emitUpdatedRoomList();
         } else {

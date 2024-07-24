@@ -36,7 +36,7 @@ const GameRoom: React.FC = () => {
 
     socket.emit('joinRoom', { roomId, playerName });
 
-    socket.on('joinedRoom', ({ color, players: roomPlayers }) => {
+    socket.on('playerJoined', ({ players: roomPlayers }) => {
       setPlayers(roomPlayers);
       const playerInGame = roomPlayers.find(p => p.name === playerName);
       setPlayerRole(playerInGame ? playerInGame.color : 'spectator');
@@ -105,7 +105,8 @@ const GameRoom: React.FC = () => {
     // ... (other event listeners remain the same)
 
     return () => {
-      socket.off('joinedRoom');
+      socket.off('playerJoined');
+      //socket.off('joinedRoom');
       socket.off('gameStart');
       socket.off('move');
       socket.off('drawOffered');

@@ -3,17 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { usePlayerStore } from '../stores/playerStore';
 import { useSocketStore } from '../stores/socketStore';
 
-interface Player {
-  id: string;
-  name: string;
-  color: 'white' | 'black' | null;
-}
-
 interface Room {
   id: string;
   name: string;
-  players: Player[];
-  spectators: string[];
+  players: { id: string; name: string; color: 'white' | 'black' }[];
 }
 
 const ChessLobby: React.FC = () => {
@@ -43,7 +36,7 @@ const ChessLobby: React.FC = () => {
       setIsLoading(false);
     });
 
-    socket.on('roomCreated', (roomId: string) => {
+    socket.on('roomCreated', ({ roomId, player }) => {
       navigate(`/room/${roomId}`);
     });
 
