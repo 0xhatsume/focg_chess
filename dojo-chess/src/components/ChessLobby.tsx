@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
-import PlayerNameForm from './PlayerNameForm';
 import { usePlayerStore } from '../stores/playerStore';
+import { useSocketStore } from '../stores/socketStore';
 
 interface Player {
   id: string;
@@ -18,7 +17,6 @@ interface Room {
 }
 
 const ChessLobby: React.FC = () => {
-  const [socket, setSocket] = useState<Socket | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [newRoomName, setNewRoomName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -26,33 +24,39 @@ const ChessLobby: React.FC = () => {
   const navigate = useNavigate();
 
   const playerName = usePlayerStore(state => state.playerName);
+  const socket = useSocketStore(state => state.socket);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3001');
-    setSocket(newSocket);
+    if (!socket) return;
 
-    newSocket.on('connect', () => {
+    socket.on('connect', () => {
       setIsLoading(false);
     });
 
-    newSocket.on('connect_error', (err) => {
+    socket.on('connect_error', (err) => {
       setIsLoading(false);
       setError('Failed to connect to the server. Please try again later.');
     });
 
-    newSocket.on('roomList', (roomList: Room[]) => {
+    socket.on('roomListUpdate', (roomList: Room[]) => {
       setRooms(roomList);
       setIsLoading(false);
     });
 
-    newSocket.on('roomCreated', (roomId: string) => {
+    socket.on('roomCreated', (roomId: string) => {
       navigate(`/room/${roomId}`);
     });
 
+    // Request initial room list
+    socket.emit('getRoomList');
+
     return () => {
-      newSocket.disconnect();
+      socket.off('connect');
+      socket.off('connect_error');
+      socket.off('roomListUpdate');
+      socket.off('roomCreated');
     };
-  }, [navigate]);
+  }, [socket, navigate]);
 
   const createRoom = () => {
     if (socket && newRoomName && playerName) {
@@ -74,10 +78,6 @@ const ChessLobby: React.FC = () => {
 
   if (error) {
     return <div>{error}</div>;
-  }
-
-  if (!playerName) {
-    return <PlayerNameForm onSubmit={() => {}} />;
   }
 
   return (

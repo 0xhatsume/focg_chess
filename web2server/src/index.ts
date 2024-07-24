@@ -6,14 +6,19 @@ import { v4 as uuidv4 } from 'uuid';
 interface Player {
     id: string;
     name: string;
-    color: 'white' | 'black' | null;
+    color: 'white' | 'black';
 }
 
 interface GameRoom {
     id: string;
     name: string;
     players: Player[];
-    spectators: string[];
+    gameStarted: boolean;
+}
+
+interface GameResult {
+    winner: 'white' | 'black' | 'draw';
+    reason: 'checkmate' | 'stalemate' | 'insufficient material' | 'threefold repetition' | 'draw' | 'resignation' | 'timeout';
 }
 
 const app = express();
@@ -26,18 +31,21 @@ const io = new Server(httpServer, {
 });
 
 const rooms: Record<string, GameRoom> = {};
-const playerNames: Record<string, string> = {}; // New: Store player names by socket ID
+const playerNames: Record<string, string> = {};
+
+function emitUpdatedRoomList() {
+    io.emit('roomListUpdate', Object.values(rooms));
+}
 
 io.on('connection', (socket: Socket) => {
     console.log('A user connected');
 
-    // New: Check if the player has a stored name
     const storedName = playerNames[socket.id];
     if (storedName) {
         socket.emit('nameRestored', storedName);
     }
 
-    socket.emit('roomList', Object.values(rooms));
+    socket.emit('roomListUpdate', Object.values(rooms));
 
     socket.on('setPlayerName', (name: string) => {
         playerNames[socket.id] = name;
@@ -50,14 +58,14 @@ io.on('connection', (socket: Socket) => {
         rooms[roomId] = { 
             id: roomId, 
             name: roomName, 
-            players: [player], 
-            spectators: [] 
+            players: [player],
+            gameStarted: false
         };
         
-        playerNames[socket.id] = playerName; // Store the player name
+        playerNames[socket.id] = playerName;
         socket.join(roomId);
         socket.emit('roomCreated', roomId);
-        io.emit('roomList', Object.values(rooms));
+        emitUpdatedRoomList();
     });
 
     socket.on('joinRoom', ({ roomId, playerName }) => {
@@ -67,9 +75,9 @@ io.on('connection', (socket: Socket) => {
                 const color = room.players[0].color === 'white' ? 'black' : 'white';
                 const player: Player = { id: socket.id, name: playerName, color };
                 room.players.push(player);
-                playerNames[socket.id] = playerName; // Store the player name
+                playerNames[socket.id] = playerName;
                 socket.join(roomId);
-                socket.emit('joinedRoom', { roomId, color, players: room.players, spectators: room.spectators });
+                io.to(roomId).emit('joinedRoom', { roomId, players: room.players });
                 if (room.players.length === 2) {
                     io.to(roomId).emit('gameStart', { 
                         white: room.players.find(p => p.color === 'white')!.name, 
@@ -77,24 +85,76 @@ io.on('connection', (socket: Socket) => {
                     });
                 }
             } else {
-                room.spectators.push(playerName);
-                playerNames[socket.id] = playerName; // Store the player name
+                // Join as spectator
+                playerNames[socket.id] = playerName;
                 socket.join(roomId);
-                socket.emit('joinedAsSpectator', { roomId, players: room.players, spectators: room.spectators });
-                io.to(roomId).emit('spectatorJoined', playerName);
+                socket.emit('joinedRoom', { roomId, players: room.players });
             }
-            io.emit('roomList', Object.values(rooms));
+            emitUpdatedRoomList();
         } else {
             socket.emit('roomNotFound');
         }
     });
 
-    // ... (other event handlers remain the same)
+    socket.on('switchSides', (roomId: string) => {
+        const room = rooms[roomId];
+        if (room && room.players.length === 2 && !room.gameStarted) {
+            [room.players[0].color, room.players[1].color] = [room.players[1].color, room.players[0].color];
+            io.to(roomId).emit('sidesSwitched', room.players);
+        }
+    });
+
+    socket.on('move', ({ roomId, move }) => {
+        const room = rooms[roomId];
+        if (room) {
+            room.gameStarted = true;
+            socket.to(roomId).emit('move', move);
+        }
+    });
+
+    socket.on('offerDraw', ({ roomId, color }) => {
+        io.to(roomId).emit('drawOffered', color);
+    });
+
+    socket.on('acceptDraw', ({ roomId }) => {
+        io.to(roomId).emit('gameOver', { winner: 'draw', reason: 'draw' });
+    });
+
+    socket.on('declineDraw', ({ roomId }) => {
+        socket.to(roomId).emit('drawDeclined');
+    });
+
+    socket.on('gameOver', ({ roomId, result }: { roomId: string, result: GameResult }) => {
+        io.to(roomId).emit('gameOver', result);
+        const room = rooms[roomId];
+        if (room) {
+            room.gameStarted = false;
+        }
+    });
+
+    socket.on('leaveRoom', (roomId: string) => {
+        const room = rooms[roomId];
+        if (room) {
+            const playerIndex = room.players.findIndex(p => p.id === socket.id);
+            if (playerIndex !== -1) {
+                const player = room.players[playerIndex];
+                room.players.splice(playerIndex, 1);
+                io.to(roomId).emit('playerLeft', { color: player.color, name: player.name });
+            }
+            socket.leave(roomId);
+            if (room.players.length === 0) {
+                delete rooms[roomId];
+            } else {
+                room.gameStarted = false;
+            }
+            emitUpdatedRoomList();
+        }
+    });
 
     socket.on('disconnect', () => {
         console.log('User disconnected');
         const playerName = playerNames[socket.id];
-        delete playerNames[socket.id]; // Remove the player name when they disconnect
+        delete playerNames[socket.id];
 
         for (const roomId in rooms) {
             const room = rooms[roomId];
@@ -103,18 +163,14 @@ io.on('connection', (socket: Socket) => {
                 const color = room.players[playerIndex].color;
                 room.players.splice(playerIndex, 1);
                 io.to(roomId).emit('playerLeft', { color, name: playerName });
-                if (room.players.length === 0 && room.spectators.length === 0) {
+                if (room.players.length === 0) {
                     delete rooms[roomId];
-                }
-            } else {
-                const spectatorIndex = room.spectators.indexOf(playerName);
-                if (spectatorIndex !== -1) {
-                    room.spectators.splice(spectatorIndex, 1);
-                    io.to(roomId).emit('spectatorLeft', playerName);
+                } else {
+                    room.gameStarted = false;
                 }
             }
         }
-        io.emit('roomList', Object.values(rooms));
+        emitUpdatedRoomList();
     });
 });
 
