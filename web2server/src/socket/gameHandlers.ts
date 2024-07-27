@@ -1,16 +1,54 @@
 import { Server, Socket } from 'socket.io';
 import { GameResult } from '../types';
 import { rooms } from './roomHandlers';
+import { Chess } from 'chess.js';
 
 export function configureGameHandlers(io: Server, socket: Socket) {
     socket.on('move', ({ roomId, move }) => {
         const room = rooms[roomId];
-        if (room) {
-            room.gameStarted = true;
-            room.moveHistory.push(move);
-            // Update FEN here based on the move
-            // room.gameFen = ...
-            io.to(roomId).emit('move', move);
+        if (room && room.gameStarted) {
+            const chess = new Chess(room.gameFen);
+            
+            try {
+                const result = chess.move(move);
+                if (result) {
+                    room.moveHistory.push(move);
+                    room.gameFen = chess.fen();
+
+                    const gameState = {
+                        fen: room.gameFen,
+                        history: room.moveHistory,
+                        status: room.gameStatus,
+                        lastMove: move
+                    };
+
+                    io.to(roomId).emit('gameState', gameState);
+
+                    // Check for game over conditions
+                    if (chess.isGameOver()) {
+                        let gameResult: GameResult;
+                        if (chess.isCheckmate()) {
+                            gameResult = {
+                                winner: chess.turn() === 'w' ? 'black' : 'white',
+                                reason: 'checkmate'
+                            };
+                        } else if (chess.isStalemate()) {
+                            gameResult = { winner: 'draw', reason: 'stalemate' };
+                        } else if (chess.isInsufficientMaterial()) {
+                            gameResult = { winner: 'draw', reason: 'insufficient material' };
+                        } else if (chess.isThreefoldRepetition()) {
+                            gameResult = { winner: 'draw', reason: 'threefold repetition' };
+                        } else {
+                            gameResult = { winner: 'draw', reason: 'draw' };
+                        }
+                        room.gameStatus = 'ended';
+                        io.to(roomId).emit('gameOver', gameResult);
+                    }
+                }
+            } catch (error) {
+                console.error('Invalid move:', error);
+                socket.emit('invalidMove', { error: 'Invalid move' });
+            }
         }
     });
 

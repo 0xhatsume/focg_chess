@@ -26,6 +26,7 @@ export function configureSocket(io: Server) {
 
     io.on('connection', (socket: Socket) => {
         console.log('A user connected', socket.data.userID);
+        console.log(socket.data);
         console.log(playerNames);
         console.log("rooms");
         console.log(rooms);
@@ -40,6 +41,7 @@ export function configureSocket(io: Server) {
         });
 
         socket.on('getPlayerName', () => {
+            console.log("getPlayerName for userID: ", socket.data.userID);
             const storedName = playerNames[socket.data.userID];
             if (storedName) {
                 socket.emit('playerNameSet', { socketId: socket.id, name: storedName });

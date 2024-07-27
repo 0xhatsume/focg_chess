@@ -52,27 +52,27 @@ const GameRoom: React.FC = () => {
       const playerInGame = roomPlayers.find(p => p.name === playerName);
       setPlayerRole(playerInGame ? playerInGame.color : 'spectator');
       setCanSwitchSides(roomPlayers.length === 2 && moveHistory.length === 0);
-      if (roomPlayers.length === 2) {
-        setGameStatus('playing');
-      }
       //setIsReconnecting(false);
     });
 
     socket.on('gameState', (gameState) => {
+      console.log("game state retrieved.")
+      console.log(gameState)
       setGame(new Chess(gameState.fen));
       setMoveHistory(gameState.history);
       setGameStatus(gameState.status);
+      setCanSwitchSides(gameState.status === 'waiting' && players.length === 2);
       // ... set other game state properties
       //setIsReconnecting(false);
     });
 
-    socket.on('gameStart', ({ white, black }) => {
-      setPlayers([
-        { id: '1', name: white, color: 'white' },
-        { id: '2', name: black, color: 'black' }
-      ]);
-      setGameStatus('playing');
-    });
+    // socket.on('gameStart', ({ white, black }) => {
+    //   setPlayers([
+    //     { id: '1', name: white, color: 'white' },
+    //     { id: '2', name: black, color: 'black' }
+    //   ]);
+    //   setGameStatus('playing');
+    // });
 
     socket.on('move', (move: string) => {
       const gameCopy = new Chess(game.fen());
@@ -126,7 +126,7 @@ const GameRoom: React.FC = () => {
       socket.off('connect');
       socket.off('playerJoined');
       socket.off('gameState');
-      socket.off('gameStart');
+      //socket.off('gameStart');
       socket.off('move');
       socket.off('drawOffered');
       socket.off('drawDeclined');
@@ -178,6 +178,12 @@ const GameRoom: React.FC = () => {
     }
 
     return true;
+  };
+
+  const startGame = () => {
+    if (socket && roomId) {
+      socket.emit('startGame', roomId);
+    }
   };
 
   const switchSides = () => {
@@ -271,12 +277,21 @@ const GameRoom: React.FC = () => {
             ? "You are a spectator" 
             : `You are playing as ${playerRole}`}
         </p>
+        <p>Game Status: <span>{gameStatus}</span></p>
         {canSwitchSides && playerRole !== 'spectator' && (
           <button 
             onClick={switchSides} 
             className="mt-4 bg-blue-500 text-white px-4 py-2 rounded mr-2"
           >
             Switch Sides
+          </button>
+        )}
+        {players.length === 2 && gameStatus=="waiting" && (
+          <button 
+            onClick={startGame} 
+            className="mt-4 mr-2 bg-green-500 text-white px-4 py-2 rounded"
+          >
+            Start Game
           </button>
         )}
         {gameStatus === 'playing' && playerRole !== 'spectator' && (

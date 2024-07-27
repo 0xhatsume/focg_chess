@@ -7,7 +7,7 @@ const rooms: Record<string, GameRoom> = {};
 
 export function configureRoomHandlers(io: Server, socket: Socket, playerNames: Record<string, string>) {
     // Send the current room list to the client when they connect
-    socket.emit('roomListUpdate', Object.values(rooms));
+    //socket.emit('roomListUpdate', Object.values(rooms));
 
     socket.on('createRoom', ({ roomName }) => {
         const roomId = uuidv4();
@@ -32,8 +32,9 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
         const room = rooms[roomId];
         if (room) {
             const existingPlayer = room.players.find(p => p.id === socket.data.userID);
-            console.log("existing player joining back")
+
             if (existingPlayer) {
+                console.log("existing player joining back");
                 // Player is rejoining the room
                 socket.join(roomId);
                 existingPlayer.name = playerName; // Update name in case it changed
@@ -56,14 +57,14 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
                 playerNames[socket.data.userID] = playerName;
                 socket.join(roomId);
                 io.to(roomId).emit('playerJoined', { roomId, players: room.players });
-                if (room.players.length === 2) {
-                    room.gameStarted = true;
-                    room.gameStatus = 'playing';
-                    io.to(roomId).emit('gameStart', { 
-                        white: room.players.find(p => p.color === 'white')!.name, 
-                        black: room.players.find(p => p.color === 'black')!.name 
-                    });
-                }
+                // if (room.players.length === 2) {
+                //     room.gameStarted = true;
+                //     room.gameStatus = 'playing';
+                //     io.to(roomId).emit('gameStart', { 
+                //         white: room.players.find(p => p.color === 'white')!.name, 
+                //         black: room.players.find(p => p.color === 'black')!.name 
+                //     });
+                // }
             } else {
                 // Join as spectator
                 console.log("spectator")
@@ -109,6 +110,23 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
         if (room && room.players.length === 2 && !room.gameStarted) {
             [room.players[0].color, room.players[1].color] = [room.players[1].color, room.players[0].color];
             io.to(roomId).emit('sidesSwitched', room.players);
+        }
+    });
+
+    socket.on('startGame', (roomId: string) => {
+        const room = rooms[roomId];
+        if (room && room.players.length === 2 && !room.gameStarted) {
+            room.gameStarted = true;
+            room.gameStatus = 'playing';
+            io.to(roomId).emit('gameStart', { 
+                white: room.players.find(p => p.color === 'white')!.name, 
+                black: room.players.find(p => p.color === 'black')!.name 
+            });
+            socket.emit('gameState', {
+                fen: room.gameFen,
+                history: room.moveHistory,
+                status: room.gameStatus,
+            });
         }
     });
 
