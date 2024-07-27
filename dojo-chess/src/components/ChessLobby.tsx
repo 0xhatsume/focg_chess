@@ -50,16 +50,10 @@ const ChessLobby: React.FC = () => {
     // Request initial room list
     socket.emit('getRoomList');
 
-    // Set up interval to periodically request room list updates
-    const interval = setInterval(() => {
-      socket.emit('getRoomList');
-    }, 5000); // Update every 5 seconds
-
     return () => {
       socket.off('connect', handleReconnect);
       socket.off('roomListUpdate', handleRoomListUpdate);
       socket.off('roomCreated', handleRoomCreated);
-      clearInterval(interval);
     };
   }, [socket, navigate, connect]);
 

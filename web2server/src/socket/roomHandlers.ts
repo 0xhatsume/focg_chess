@@ -32,6 +32,7 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
         const room = rooms[roomId];
         if (room) {
             const existingPlayer = room.players.find(p => p.id === socket.data.userID);
+            console.log("existing player joining back")
             if (existingPlayer) {
                 // Player is rejoining the room
                 socket.join(roomId);
@@ -46,8 +47,9 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
                         status: room.gameStatus,
                     });
                 }
-            } else if (room.players.length < 2) {
+            } else if (room.players.length < 3) {
                 // New player joining
+                console.log("new player joining")
                 const color = room.players[0].color === 'white' ? 'black' : 'white';
                 const player: Player = { id: socket.data.userID, name: playerName, color };
                 room.players.push(player);
@@ -64,6 +66,7 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
                 }
             } else {
                 // Join as spectator
+                console.log("spectator")
                 playerNames[socket.data.userID] = playerName;
                 socket.join(roomId);
                 socket.emit('joinedAsSpectator', { roomId, players: room.players });

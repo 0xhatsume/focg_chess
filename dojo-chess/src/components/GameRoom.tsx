@@ -27,20 +27,23 @@ const GameRoom: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [canSwitchSides, setCanSwitchSides] = useState(false);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
-  const [isReconnecting, setIsReconnecting] = useState(false);
+  //const [isReconnecting, setIsReconnecting] = useState(false);
+  const [joinedRoom, setJoinedRoom] = useState(false);
   
   const playerName = usePlayerStore(state => state.playerName);
   const socket = useSocketStore(state => state.socket);
 
+  //console.log("game room.")
   useEffect(() => {
     if (!socket || !roomId || !playerName) return;
 
     const joinRoom = () => {
-      setIsReconnecting(true);
+      //setIsReconnecting(true);
       socket.emit('joinRoom', { roomId, playerName });
+      setJoinedRoom(true);
     };
 
-    joinRoom();
+    !joinedRoom ? joinRoom() : null;
 
     socket.on('connect', joinRoom);
 
@@ -52,7 +55,7 @@ const GameRoom: React.FC = () => {
       if (roomPlayers.length === 2) {
         setGameStatus('playing');
       }
-      setIsReconnecting(false);
+      //setIsReconnecting(false);
     });
 
     socket.on('gameState', (gameState) => {
@@ -60,7 +63,7 @@ const GameRoom: React.FC = () => {
       setMoveHistory(gameState.history);
       setGameStatus(gameState.status);
       // ... set other game state properties
-      setIsReconnecting(false);
+      //setIsReconnecting(false);
     });
 
     socket.on('gameStart', ({ white, black }) => {
@@ -130,7 +133,7 @@ const GameRoom: React.FC = () => {
       socket.off('gameOver');
       socket.off('sidesSwitched');
     };
-  }, [socket, roomId, playerName, game]);
+  }, [socket, roomId, playerName, game, joinedRoom]);
 
   const onDrop = (sourceSquare: string, targetSquare: string) => {
     if (gameStatus !== 'playing' || playerRole === 'spectator' || (game.turn() === 'w' && playerRole !== 'white') || (game.turn() === 'b' && playerRole !== 'black')) {
@@ -248,9 +251,9 @@ const GameRoom: React.FC = () => {
     return <div>Connecting to server...</div>;
   }
 
-  if (isReconnecting) {
-    return <div>Reconnecting to game...</div>;
-  }
+  // if (isReconnecting) {
+  //   return <div>Reconnecting to game...</div>;
+  // }
 
   return (
     <div className="flex flex-col md:flex-row items-center justify-center min-h-screen bg-gray-100 p-4">
