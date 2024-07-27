@@ -11,45 +11,57 @@ interface Room {
 
 const ChessLobby: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [myRooms, setMyRooms] = useState<Room[]>([]);
   const [newRoomName, setNewRoomName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const playerName = usePlayerStore(state => state.playerName);
-  const socket = useSocketStore(state => state.socket);
+  const { socket, connect } = useSocketStore();
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      connect();
+      return;
+    }
 
-    socket.on('connect', () => {
-      setIsLoading(false);
-    });
-
-    socket.on('connect_error', (err) => {
-      setIsLoading(false);
-      setError('Failed to connect to the server. Please try again later.');
-    });
-
-    socket.on('roomListUpdate', (roomList: Room[]) => {
+    const handleRoomListUpdate = (roomList: Room[]) => {
       setRooms(roomList);
+      setMyRooms(roomList.filter(room => 
+        room.players.some(player => player.id === socket.id)
+      ));
       setIsLoading(false);
-    });
+    };
 
-    socket.on('roomCreated', ({ roomId, player }) => {
+    const handleRoomCreated = ({ roomId }: { roomId: string }) => {
       navigate(`/room/${roomId}`);
-    });
+    };
+
+    const handleReconnect = () => {
+      console.log('Reconnected, fetching room list');
+      socket.emit('getRoomList');
+    };
+
+    socket.on('connect', handleReconnect);
+    socket.on('roomListUpdate', handleRoomListUpdate);
+    socket.on('roomCreated', handleRoomCreated);
 
     // Request initial room list
     socket.emit('getRoomList');
 
+    // Set up interval to periodically request room list updates
+    const interval = setInterval(() => {
+      socket.emit('getRoomList');
+    }, 5000); // Update every 5 seconds
+
     return () => {
-      socket.off('connect');
-      socket.off('connect_error');
-      socket.off('roomListUpdate');
-      socket.off('roomCreated');
+      socket.off('connect', handleReconnect);
+      socket.off('roomListUpdate', handleRoomListUpdate);
+      socket.off('roomCreated', handleRoomCreated);
+      clearInterval(interval);
     };
-  }, [socket, navigate]);
+  }, [socket, navigate, connect]);
 
   const createRoom = () => {
     if (socket && newRoomName && playerName) {
@@ -59,18 +71,17 @@ const ChessLobby: React.FC = () => {
 
   const joinRoom = (roomId: string) => {
     if (socket && playerName) {
-      console.log('Joining room', roomId);
       socket.emit('joinRoom', { roomId, playerName });
       navigate(`/room/${roomId}`);
     }
   };
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <div className="flex justify-center items-center h-screen">Loading lobby...</div>;
   }
 
   if (error) {
-    return <div>{error}</div>;
+    return <div className="flex justify-center items-center h-screen text-red-500">{error}</div>;
   }
 
   return (
@@ -93,16 +104,28 @@ const ChessLobby: React.FC = () => {
           Create Room
         </button>
       </div>
+      {myRooms.length > 0 && (
+        <div className="w-full max-w-md mb-4">
+          <h2 className="text-xl mb-2">Your Active Rooms:</h2>
+          {myRooms.map((room) => (
+            <div key={room.id} className="bg-white p-2 mb-2 rounded shadow">
+              <span>{room.name} ({room.players.length}/2 players)</span>
+              <button 
+                onClick={() => joinRoom(room.id)} 
+                className="bg-yellow-500 text-white px-2 py-1 rounded ml-2"
+              >
+                Rejoin
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="w-full max-w-md">
         <h2 className="text-xl mb-2">Available Rooms:</h2>
         {rooms.length > 0 ? (
           rooms.map((room) => (
             <div key={room.id} className="bg-white p-2 mb-2 rounded shadow">
               <span>{room.name} ({room.players.length}/2 players)</span>
-              <span className="ml-2 text-sm text-gray-600">
-                Created by: {room.players[0]?.name} (
-                {room.players[0]?.color === 'white' ? 'White' : 'Black'})
-              </span>
               <button 
                 onClick={() => joinRoom(room.id)} 
                 className="bg-green-500 text-white px-2 py-1 rounded ml-2"

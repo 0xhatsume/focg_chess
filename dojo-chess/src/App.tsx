@@ -13,9 +13,10 @@ import PlayerNameForm from './components/PlayerNameForm';
 import { usePlayerStore } from './stores/playerStore';
 import { useSocketStore } from './stores/socketStore';
 
+
 const App: React.FC = () => {
-    const [isNameSet, setIsNameSet] = useState(false);
-    const playerName = usePlayerStore(state => state.playerName);
+    const [isLoading, setIsLoading] = useState(false);
+    const { playerName, setPlayerName } = usePlayerStore();
     const { socket, connect, disconnect } = useSocketStore();
 
     useEffect(() => {
@@ -26,13 +27,48 @@ const App: React.FC = () => {
     }, [connect, disconnect]);
 
     useEffect(() => {
-        if (playerName) {
-            setIsNameSet(true);
-        }
-    }, [playerName]);
+        if (!socket) return;
 
-    if (!isNameSet) {
-        return <PlayerNameForm onSubmit={() => setIsNameSet(true)} />;
+        const handlePlayerNameSet = ({ socketId, name }: { socketId: string, name: string | null }) => {
+            console.log("player name retrieved.")
+            if (socketId === socket.id) {
+                setPlayerName(name);
+                setIsLoading(false);
+            }
+        };
+
+        const handleConnect = () => {
+            // When (re)connected, fetch the player name
+            socket.emit('getPlayerName');
+        };
+
+        socket.on('connect', handleConnect);
+        socket.on('playerNameSet', handlePlayerNameSet);
+
+        // Initial fetch of player name
+        socket.emit('getPlayerName');
+
+        return () => {
+            socket.off('connect', handleConnect);
+            socket.off('playerNameSet', handlePlayerNameSet);
+        };
+    }, [socket, setPlayerName]);
+
+    const handleNameSubmit = (name: string) => {
+        setIsLoading(true);
+        socket?.emit('setPlayerName', name);
+    };
+
+    if (!socket) {
+        return <div>Connecting to server...</div>;
+    }
+
+    if (!playerName) {
+        return <PlayerNameForm onSubmit={handleNameSubmit} />;
+    }
+
+    if (isLoading) {
+        return <div>Loading game lobby...</div>;
     }
 
     return (

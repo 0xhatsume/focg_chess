@@ -1,19 +1,10 @@
 import create from 'zustand';
-import { persist } from 'zustand/middleware';
-
 interface PlayerState {
-    playerName: string;
-    setPlayerName: (name: string) => void;
+    playerName: string | null;
+    setPlayerName: (name: string | null) => void;
 }
 
-export const usePlayerStore = create<PlayerState>()(
-    persist(
-        (set) => ({
-            playerName: '',
-            setPlayerName: (name: string) => set({ playerName: name }),
-        }),
-        {
-            name: 'player-storage',
-        }
-    )
-);
+export const usePlayerStore = create<PlayerState>((set) => ({
+    playerName: null,
+    setPlayerName: (name: string | null) => set({ playerName: name }),
+}));

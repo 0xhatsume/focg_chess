@@ -27,14 +27,22 @@ const GameRoom: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [canSwitchSides, setCanSwitchSides] = useState(false);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   
   const playerName = usePlayerStore(state => state.playerName);
   const socket = useSocketStore(state => state.socket);
 
   useEffect(() => {
-    if (!socket || !roomId) return;
+    if (!socket || !roomId || !playerName) return;
 
-    socket.emit('joinRoom', { roomId, playerName });
+    const joinRoom = () => {
+      setIsReconnecting(true);
+      socket.emit('joinRoom', { roomId, playerName });
+    };
+
+    joinRoom();
+
+    socket.on('connect', joinRoom);
 
     socket.on('playerJoined', ({ players: roomPlayers }) => {
       setPlayers(roomPlayers);
@@ -44,6 +52,15 @@ const GameRoom: React.FC = () => {
       if (roomPlayers.length === 2) {
         setGameStatus('playing');
       }
+      setIsReconnecting(false);
+    });
+
+    socket.on('gameState', (gameState) => {
+      setGame(new Chess(gameState.fen));
+      setMoveHistory(gameState.history);
+      setGameStatus(gameState.status);
+      // ... set other game state properties
+      setIsReconnecting(false);
     });
 
     socket.on('gameStart', ({ white, black }) => {
@@ -60,7 +77,7 @@ const GameRoom: React.FC = () => {
       setGame(gameCopy);
       setMoveHistory(prev => [...prev, move]);
       setCanSwitchSides(false);
-      setDrawOffered(null);  // Reset draw offer after a move
+      setDrawOffered(null);
 
       if (gameCopy.isGameOver()) {
         let result: GameResult;
@@ -102,18 +119,16 @@ const GameRoom: React.FC = () => {
       setPlayerRole(playerInGame ? playerInGame.color : 'spectator');
     });
 
-    // ... (other event listeners remain the same)
-
     return () => {
+      socket.off('connect');
       socket.off('playerJoined');
-      //socket.off('joinedRoom');
+      socket.off('gameState');
       socket.off('gameStart');
       socket.off('move');
       socket.off('drawOffered');
       socket.off('drawDeclined');
       socket.off('gameOver');
       socket.off('sidesSwitched');
-      // ... (other event listeners off)
     };
   }, [socket, roomId, playerName, game]);
 
@@ -228,6 +243,14 @@ const GameRoom: React.FC = () => {
       </div>
     );
   };
+
+  if (!socket) {
+    return <div>Connecting to server...</div>;
+  }
+
+  if (isReconnecting) {
+    return <div>Reconnecting to game...</div>;
+  }
 
   return (
     <div className="flex flex-col md:flex-row items-center justify-center min-h-screen bg-gray-100 p-4">

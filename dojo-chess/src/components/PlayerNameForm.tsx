@@ -1,48 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { usePlayerStore } from '../stores/playerStore';
-import { useSocketStore } from '../stores/socketStore';
+import React, { useState } from 'react';
 
 interface PlayerNameFormProps {
-  onSubmit: () => void;
+    onSubmit: (name: string) => void;
 }
 
 const PlayerNameForm: React.FC<PlayerNameFormProps> = ({ onSubmit }) => {
     const [name, setName] = useState('');
-    const setPlayerName = usePlayerStore(state => state.setPlayerName);
-    const playerName = usePlayerStore(state => state.playerName);
-    const socket = useSocketStore(state => state.socket);
-
-    useEffect(() => {
-        if (socket) {
-            socket.on('nameRestored', (restoredName: string) => {
-                setPlayerName(restoredName);
-                onSubmit();
-            });
-
-            return () => {
-                socket.off('nameRestored');
-            };
-        }
-    }, [socket, setPlayerName, onSubmit]);
-
-    useEffect(() => {
-        if (playerName) {
-            onSubmit();
-        }
-    }, [playerName, onSubmit]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (name.trim() && socket) {
-            setPlayerName(name.trim());
-            socket.emit('setPlayerName', name.trim());
-            onSubmit();
+        if (name.trim()) {
+            onSubmit(name.trim());
         }
     };
-
-    if (playerName) {
-        return null; // Don't render the form if we already have a player name
-    }
 
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
