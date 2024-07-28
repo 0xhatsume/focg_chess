@@ -54,7 +54,7 @@ const GameRoom: React.FC = () => {
 
     const joinRoom = () => {
       //setIsReconnecting(true);
-      socket.emit('joinRoom', { roomId, playerName });
+      socket.emit('joinRoom', { roomId });
       setJoinedRoom(true);
     };
 

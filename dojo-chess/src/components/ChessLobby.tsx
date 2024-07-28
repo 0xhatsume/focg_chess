@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePlayerStore } from '../stores/playerStore';
 import { useSocketStore } from '../stores/socketStore';
+import Modal from './Modal';
 
 interface Room {
   id: string;
@@ -9,12 +10,21 @@ interface Room {
   players: { id: string; name: string; color: 'white' | 'black' }[];
 }
 
+interface Invitation {
+  from: string;
+  roomId: string;
+}
+
+
 const ChessLobby: React.FC = () => {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [myRooms, setMyRooms] = useState<Room[]>([]);
   const [newRoomName, setNewRoomName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [invitePlayerName, setInvitePlayerName] = useState('');
+  const [invitation, setInvitation] = useState<Invitation | null>(null);
   const navigate = useNavigate();
 
   const playerName = usePlayerStore(state => state.playerName);
@@ -38,6 +48,20 @@ const ChessLobby: React.FC = () => {
       navigate(`/room/${roomId}`);
     };
 
+    const handleInvitation = ({ from, roomId }: { from: string, roomId: string }) => {
+      setInvitation({ from, roomId });
+      // if (window.confirm(`${from} has invited you to play chess. Do you accept?`)) {
+      //   socket.emit('acceptInvitation', { roomId });
+      //   navigate(`/room/${roomId}`);
+      // } else {
+      //   socket.emit('declineInvitation', { from });
+      // }
+    };
+
+    const handleInviteAccepted = ({ roomId }: { roomId: string }) => {
+      navigate(`/room/${roomId}`);
+    };
+
     const handleReconnect = () => {
       console.log('Reconnected, fetching room list');
       socket.emit('getRoomList');
@@ -46,6 +70,8 @@ const ChessLobby: React.FC = () => {
     socket.on('connect', handleReconnect);
     socket.on('roomListUpdate', handleRoomListUpdate);
     socket.on('roomCreated', handleRoomCreated);
+    socket.on('invitation', handleInvitation);
+    socket.on('inviteAccepted', handleInviteAccepted);
 
     // Request initial room list
     socket.emit('getRoomList');
@@ -54,8 +80,10 @@ const ChessLobby: React.FC = () => {
       socket.off('connect', handleReconnect);
       socket.off('roomListUpdate', handleRoomListUpdate);
       socket.off('roomCreated', handleRoomCreated);
+      socket.off('invitation', handleInvitation);
+      socket.off('inviteAccepted', handleInviteAccepted);
     };
-  }, [socket, navigate, connect]);
+  }, [socket, navigate, connect, rooms]);
 
   const createRoom = () => {
     if (socket && newRoomName && playerName) {
@@ -68,6 +96,29 @@ const ChessLobby: React.FC = () => {
       socket.emit('joinRoom', { roomId, playerName });
       navigate(`/room/${roomId}`);
     }
+  };
+
+  const invitePlayer = () => {
+    if (socket && playerName && invitePlayerName) {
+      socket.emit('invitePlayer', { invitee: invitePlayerName });
+      setIsInviteModalOpen(false);
+      setInvitePlayerName('');
+    }
+  };
+  
+  const handleAcceptInvitation = () => {
+    if (socket && invitation) {
+      socket.emit('acceptInvitation', { roomId: invitation.roomId });
+      navigate(`/room/${invitation.roomId}`);
+    }
+    setInvitation(null);
+  };
+
+  const handleDeclineInvitation = () => {
+    if (socket && invitation) {
+      socket.emit('declineInvitation', { from: invitation.from });
+    }
+    setInvitation(null);
   };
 
   if (isLoading) {
@@ -97,6 +148,12 @@ const ChessLobby: React.FC = () => {
         >
           Create Room
         </button>
+        <button 
+          onClick={() => setIsInviteModalOpen(true)} 
+          className="bg-green-500 text-white px-4 py-2 rounded"
+        >
+          Invite Player
+        </button>
       </div>
       {myRooms.length > 0 && (
         <div className="w-full max-w-md mb-4">
@@ -123,7 +180,6 @@ const ChessLobby: React.FC = () => {
               <button 
                 onClick={() => joinRoom(room.id)} 
                 className="bg-green-500 text-white px-2 py-1 rounded ml-2"
-                disabled={room.players.length >= 2}
               >
                 Join
               </button>
@@ -133,6 +189,49 @@ const ChessLobby: React.FC = () => {
           <p>No rooms available. Create a new room to start playing!</p>
         )}
       </div>
+      <Modal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        title="Invite Player"
+      >
+        <input 
+          type="text" 
+          value={invitePlayerName}
+          onChange={(e) => setInvitePlayerName(e.target.value)}
+          placeholder="Player Name" 
+          className="border p-2 rounded w-full mb-4"
+        />
+        <button 
+          onClick={invitePlayer} 
+          className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+          disabled={!invitePlayerName.trim()}
+        >
+          Send Invitation
+        </button>
+      </Modal>
+
+      <Modal
+        isOpen={invitation !== null}
+        onClose={handleDeclineInvitation}
+        title="Game Invitation"
+      >
+        <p className="mb-4">{invitation?.from} has invited you to play chess. Do you accept?</p>
+        <div className="flex justify-end">
+          <button 
+            onClick={handleDeclineInvitation} 
+            className="bg-red-500 text-white px-4 py-2 rounded mr-2"
+          >
+            Decline
+          </button>
+          <button 
+            onClick={handleAcceptInvitation} 
+            className="bg-green-500 text-white px-4 py-2 rounded"
+          >
+            Accept
+          </button>
+        </div>
+      </Modal>
+
     </div>
   );
 };

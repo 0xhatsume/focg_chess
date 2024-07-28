@@ -2,7 +2,6 @@
 // import { Entity } from "@dojoengine/recs";
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import { io, Socket } from 'socket.io-client';
 //import ChessGame from "./game/ChessGame";
 import ChessLobby from "./components/ChessLobby";
 import GameRoom from './components/GameRoom';
@@ -45,14 +44,16 @@ const App: React.FC = () => {
         socket.on('connect', handleConnect);
         socket.on('playerNameSet', handlePlayerNameSet);
 
-        // Initial fetch of player name
-        socket.emit('getPlayerName');
+        // Initial connection
+        if (socket.connected) {
+            handleConnect();
+        }
 
         return () => {
             socket.off('connect', handleConnect);
             socket.off('playerNameSet', handlePlayerNameSet);
         };
-    }, [socket, setPlayerName]);
+    }, [socket, setPlayerName, playerName]);
 
     const handleNameSubmit = (name: string) => {
         setIsLoading(true);
@@ -67,9 +68,9 @@ const App: React.FC = () => {
         return <PlayerNameForm onSubmit={handleNameSubmit} />;
     }
 
-    if (isLoading) {
-        return <div>Loading game lobby...</div>;
-    }
+    // if (isLoading) {
+    //     return <div>Loading game lobby...</div>;
+    // }
 
     return (
         <Router>
