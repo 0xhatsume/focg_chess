@@ -6,7 +6,7 @@ import { Chess } from 'chess.js';
 export function configureGameHandlers(io: Server, socket: Socket) {
     socket.on('move', ({ roomId, move }) => {
         const room = rooms[roomId];
-        if (room && room.gameStarted) {
+        if (room && room.gameStarted) { // only if game started
             const chess = new Chess(room.gameFen);
             
             try {
@@ -69,7 +69,7 @@ export function configureGameHandlers(io: Server, socket: Socket) {
         socket.to(roomId).emit('drawDeclined');
     });
 
-    socket.on('gameOver', ({ roomId, result }: { roomId: string, result: GameResult }) => {
+    socket.on('resign', ({ roomId, result }: { roomId: string, result: GameResult }) => {
         const room = rooms[roomId];
         if (room) {
             room.gameStatus = 'ended';
@@ -80,11 +80,18 @@ export function configureGameHandlers(io: Server, socket: Socket) {
     socket.on('getGameState', (roomId: string) => {
         const room = rooms[roomId];
         if (room) {
-            socket.emit('gameState', {
+            io.to(roomId).emit('gameState', {
                 fen: room.gameFen,
                 history: room.moveHistory,
                 status: room.gameStatus,
             });
+
+            console.log("getGameState:")
+            console.log({
+                fen: room.gameFen,
+                history: room.moveHistory,
+                status: room.gameStatus,
+            })
         }
     });
 }

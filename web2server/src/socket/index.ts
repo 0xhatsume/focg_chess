@@ -54,6 +54,20 @@ export function configureSocket(io: Server) {
             console.log(playerNames);  
         });
 
+        socket.on('getSession', () => {
+            const session = sessionStore.get(socket.data.sessionID);
+            if (session) {
+                socket.emit('sessionData', {
+                    sessionID: socket.data.sessionID,
+                    userID: session.userID,
+                    playerName: playerNames[session.userID] || null,
+                    // Add any other session data you want to include
+                });
+            } else {
+                socket.emit('sessionData', null);
+            }
+        });
+        
         configureRoomHandlers(io, socket, playerNames);
         configureGameHandlers(io, socket);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Chessboard } from 'react-chessboard';
 import { Chess } from 'chess.js';
@@ -27,13 +27,28 @@ const GameRoom: React.FC = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [canSwitchSides, setCanSwitchSides] = useState(false);
   const [gameResult, setGameResult] = useState<GameResult | null>(null);
-  //const [isReconnecting, setIsReconnecting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [joinedRoom, setJoinedRoom] = useState(false);
   
   const playerName = usePlayerStore(state => state.playerName);
   const socket = useSocketStore(state => state.socket);
 
-  //console.log("game room.")
+  const updateGameState = useCallback((fen: string, history: string[], status: 'waiting' | 'playing' | 'ended') => {
+      const newGame = new Chess(fen);
+      setGame(newGame);
+      setMoveHistory(history);
+      setGameStatus(status);
+      setCanSwitchSides(status === 'waiting' && players.length === 2);
+      setIsLoading(false);
+
+    }, [players]);
+
+  const fetchGameState = useCallback(() => {
+    if (socket && roomId) {
+      socket.emit('getGameState', roomId);
+    }
+  }, [socket, roomId]);
+
   useEffect(() => {
     if (!socket || !roomId || !playerName) return;
 
@@ -43,65 +58,30 @@ const GameRoom: React.FC = () => {
       setJoinedRoom(true);
     };
 
-    !joinedRoom ? joinRoom() : null;
+    const handleGameState = (
+        gameState: { 
+          fen: string; 
+          history: string[]; 
+          status: 'waiting' | 'playing' | 'ended' 
+        }) => {
+      console.log("handle game state...")
+      updateGameState(gameState.fen, gameState.history, gameState.status);
+    };
 
-    socket.on('connect', joinRoom);
+    socket.on('connect', fetchGameState);
 
-    socket.on('playerJoined', ({ players: roomPlayers }) => {
+    socket.on('playerJoined', ({ players: roomPlayers, fen, history, status }) => {
       setPlayers(roomPlayers);
       const playerInGame = roomPlayers.find(p => p.name === playerName);
       setPlayerRole(playerInGame ? playerInGame.color : 'spectator');
-      setCanSwitchSides(roomPlayers.length === 2 && moveHistory.length === 0);
+      setGame(new Chess(fen));
+      setMoveHistory(history);
+      setGameStatus(status);
+      setCanSwitchSides(status === 'waiting' && players.length === 2);
       //setIsReconnecting(false);
     });
 
-    socket.on('gameState', (gameState) => {
-      console.log("game state retrieved.")
-      console.log(gameState)
-      setGame(new Chess(gameState.fen));
-      setMoveHistory(gameState.history);
-      setGameStatus(gameState.status);
-      setCanSwitchSides(gameState.status === 'waiting' && players.length === 2);
-      // ... set other game state properties
-      //setIsReconnecting(false);
-    });
-
-    // socket.on('gameStart', ({ white, black }) => {
-    //   setPlayers([
-    //     { id: '1', name: white, color: 'white' },
-    //     { id: '2', name: black, color: 'black' }
-    //   ]);
-    //   setGameStatus('playing');
-    // });
-
-    socket.on('move', (move: string) => {
-      const gameCopy = new Chess(game.fen());
-      gameCopy.move(move);
-      setGame(gameCopy);
-      setMoveHistory(prev => [...prev, move]);
-      setCanSwitchSides(false);
-      setDrawOffered(null);
-
-      if (gameCopy.isGameOver()) {
-        let result: GameResult;
-        if (gameCopy.isCheckmate()) {
-          result = {
-            winner: gameCopy.turn() === 'w' ? 'black' : 'white',
-            reason: 'checkmate'
-          };
-        } else if (gameCopy.isStalemate()) {
-          result = { winner: 'draw', reason: 'stalemate' };
-        } else if (gameCopy.isInsufficientMaterial()) {
-          result = { winner: 'draw', reason: 'insufficient material' };
-        } else if (gameCopy.isThreefoldRepetition()) {
-          result = { winner: 'draw', reason: 'threefold repetition' };
-        } else {
-          result = { winner: 'draw', reason: 'draw' };
-        }
-        setGameResult(result);
-        setGameStatus('ended');
-      }
-    });
+    socket.on('gameState', handleGameState);
 
     socket.on('drawOffered', (color: 'white' | 'black') => {
       setDrawOffered(color);
@@ -122,18 +102,23 @@ const GameRoom: React.FC = () => {
       setPlayerRole(playerInGame ? playerInGame.color : 'spectator');
     });
 
+    !joinedRoom ? joinRoom() : null;
+    fetchGameState();
+
+
     return () => {
       socket.off('connect');
       socket.off('playerJoined');
       socket.off('gameState');
       //socket.off('gameStart');
-      socket.off('move');
+      //socket.off('move');
       socket.off('drawOffered');
       socket.off('drawDeclined');
       socket.off('gameOver');
       socket.off('sidesSwitched');
     };
-  }, [socket, roomId, playerName, game, joinedRoom]);
+  }, [socket, roomId, playerName, joinedRoom, updateGameState, fetchGameState, players]);
+
 
   const onDrop = (sourceSquare: string, targetSquare: string) => {
     if (gameStatus !== 'playing' || playerRole === 'spectator' || (game.turn() === 'w' && playerRole !== 'white') || (game.turn() === 'b' && playerRole !== 'black')) {
@@ -172,7 +157,6 @@ const GameRoom: React.FC = () => {
       } else {
         result = { winner: 'draw', reason: 'draw' };
       }
-      socket?.emit('gameOver', { roomId, result });
       setGameResult(result);
       setGameStatus('ended');
     }
@@ -198,7 +182,7 @@ const GameRoom: React.FC = () => {
         winner: playerRole === 'white' ? 'black' : 'white',
         reason: 'resignation'
       };
-      socket.emit('gameOver', { roomId, result });
+      socket.emit('resign', { roomId, result });
       setGameResult(result);
       setGameStatus('ended');
     }
@@ -257,9 +241,9 @@ const GameRoom: React.FC = () => {
     return <div>Connecting to server...</div>;
   }
 
-  // if (isReconnecting) {
-  //   return <div>Reconnecting to game...</div>;
-  // }
+  if (isLoading) {
+    return <div>Loading game state...</div>;
+  }
 
   return (
     <div className="flex flex-col md:flex-row items-center justify-center min-h-screen bg-gray-100 p-4">

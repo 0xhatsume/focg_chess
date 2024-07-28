@@ -34,20 +34,18 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
             const existingPlayer = room.players.find(p => p.id === socket.data.userID);
 
             if (existingPlayer) {
-                console.log("existing player joining back");
+                console.log("existing player joining back", socket.data.userID);
                 // Player is rejoining the room
                 socket.join(roomId);
                 existingPlayer.name = playerName; // Update name in case it changed
-                socket.emit('playerJoined', { roomId, players: room.players });
-                
-                // Resend the current game state
-                if (room.gameStarted) {
-                    socket.emit('gameState', {
+                io.to(roomId).emit('playerJoined', { 
+                        roomId, 
+                        players: room.players,
                         fen: room.gameFen,
                         history: room.moveHistory,
-                        status: room.gameStatus,
+                        status: room.gameStatus
                     });
-                }
+                
             } else if (room.players.length < 3) {
                 // New player joining
                 console.log("new player joining")
@@ -56,7 +54,14 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
                 room.players.push(player);
                 playerNames[socket.data.userID] = playerName;
                 socket.join(roomId);
-                io.to(roomId).emit('playerJoined', { roomId, players: room.players });
+                io.to(roomId).emit('playerJoined', 
+                { 
+                    roomId, 
+                    players: room.players,
+                    fen: room.gameFen,
+                    history: room.moveHistory,
+                    status: room.gameStatus
+                });
                 // if (room.players.length === 2) {
                 //     room.gameStarted = true;
                 //     room.gameStatus = 'playing';
@@ -70,15 +75,17 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
                 console.log("spectator")
                 playerNames[socket.data.userID] = playerName;
                 socket.join(roomId);
-                socket.emit('joinedAsSpectator', { roomId, players: room.players });
-                if (room.gameStarted) {
-                    socket.emit('gameState', {
+                io.to(roomId).emit('joinedAsSpectator', 
+                    { 
+                        roomId, 
+                        players: room.players,
                         fen: room.gameFen,
                         history: room.moveHistory,
-                        status: room.gameStatus,
+                        status: room.gameStatus
                     });
-                }
+                
             }
+            
             emitUpdatedRoomList(io);
         } else {
             socket.emit('roomNotFound');
@@ -99,7 +106,7 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
                 delete rooms[roomId];
             } else {
                 room.gameStarted = false;
-                room.gameStatus = 'waiting';
+                //room.gameStatus = 'waiting';
             }
             emitUpdatedRoomList(io);
         }
@@ -122,7 +129,8 @@ export function configureRoomHandlers(io: Server, socket: Socket, playerNames: R
                 white: room.players.find(p => p.color === 'white')!.name, 
                 black: room.players.find(p => p.color === 'black')!.name 
             });
-            socket.emit('gameState', {
+            io.to(roomId).emit('gameState', {
+                room: roomId,
                 fen: room.gameFen,
                 history: room.moveHistory,
                 status: room.gameStatus,
