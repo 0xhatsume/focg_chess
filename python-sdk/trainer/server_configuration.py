@@ -13,6 +13,6 @@ class ServerConfiguration(NamedTuple):
 
 
 LocalhostServerConfiguration = ServerConfiguration(
-    "ws://localhost:3001/",
+    "localhost:3001",
     "",
 )

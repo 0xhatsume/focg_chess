@@ -73,6 +73,13 @@ const ChessLobby: React.FC = () => {
     socket.on('invitation', handleInvitation);
     socket.on('inviteAccepted', handleInviteAccepted);
 
+    socket.on('invitationSent', ({ message, roomId, roomName }) => {
+      console.log(message);
+      console.log(`You are now in room: ${roomName} (ID: ${roomId})`);
+      // You can update the UI here, perhaps navigating to the room
+      // or showing a notification
+    });
+
     // Request initial room list
     socket.emit('getRoomList');
 
@@ -82,6 +89,7 @@ const ChessLobby: React.FC = () => {
       socket.off('roomCreated', handleRoomCreated);
       socket.off('invitation', handleInvitation);
       socket.off('inviteAccepted', handleInviteAccepted);
+      socket.off('invitationSent');
     };
   }, [socket, navigate, connect, rooms]);
 

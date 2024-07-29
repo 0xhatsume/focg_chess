@@ -154,8 +154,22 @@ export function configureRoomHandlers(io: Server, socket: Socket, sessionStore: 
                 gameStatus: 'waiting'
             };
 
+            // Emit invitation to invitee
             io.to(inviteeSocketId).emit('invitation', { from: inviterName, roomId });
-            socket.emit('roomListUpdate', Object.values(rooms));
+
+            // Emit acknowledgement to inviter
+            socket.emit('invitationSent', { 
+                message: `Invitation sent to ${invitee}`,
+                roomId: roomId,
+                roomName: rooms[roomId].name
+            });
+
+            // Join the inviter to the room
+            socket.join(roomId);
+            
+            // Emit updated room list to all connected clients
+            io.emit('roomListUpdate', Object.values(rooms));
+            
         } else {
             socket.emit('invitationError', { message: 'Player not found or offline' });
             console.log("invitation error")

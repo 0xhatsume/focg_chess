@@ -27,7 +27,7 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (!socket) return;
-
+        
         const handlePlayerNameSet = ({ socketId, name }: { socketId: string, name: string | null }) => {
             console.log("player name retrieved.")
             if (socketId === socket.id) {
