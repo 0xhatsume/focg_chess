@@ -5,6 +5,7 @@ import { Chess } from 'chess.js';
 
 export function configureGameHandlers(io: Server, socket: Socket) {
     socket.on('move', ({ roomId, move }) => {
+        console.log("MOVINGGGGG!!! ", move)
         const room = rooms[roomId];
         if (room && room.gameStarted) { // only if game started
             const chess = new Chess(room.gameFen);
@@ -16,9 +17,12 @@ export function configureGameHandlers(io: Server, socket: Socket) {
                     room.gameFen = chess.fen();
 
                     const gameState = {
+                        roomId: roomId,
                         fen: room.gameFen,
                         history: room.moveHistory,
                         status: room.gameStatus,
+                        white: room.players.find(p => p.color === 'white')!.name, 
+                        black: room.players.find(p => p.color === 'black')!.name, 
                         lastMove: move
                     };
 
@@ -46,7 +50,7 @@ export function configureGameHandlers(io: Server, socket: Socket) {
                     }
                 }
             } catch (error) {
-                console.error('Invalid move:', error);
+                console.error('Invalid move:', move);
                 socket.emit('invalidMove', { error: 'Invalid move' });
             }
         }
@@ -81,6 +85,7 @@ export function configureGameHandlers(io: Server, socket: Socket) {
         const room = rooms[roomId];
         if (room) {
             io.to(roomId).emit('gameState', {
+                ...room,
                 fen: room.gameFen,
                 history: room.moveHistory,
                 status: room.gameStatus,
@@ -88,6 +93,7 @@ export function configureGameHandlers(io: Server, socket: Socket) {
 
             console.log("getGameState:")
             console.log({
+                ...room,
                 fen: room.gameFen,
                 history: room.moveHistory,
                 status: room.gameStatus,

@@ -111,7 +111,9 @@ export function configureRoomHandlers(io: Server, socket: Socket, sessionStore: 
         if (room && room.players.length === 2 && !room.gameStarted) {
             room.gameStarted = true;
             room.gameStatus = 'playing';
+            console.log("gameStart", roomId)
             io.to(roomId).emit('gameStart', { 
+                ...room,
                 white: room.players.find(p => p.color === 'white')!.name, 
                 black: room.players.find(p => p.color === 'black')!.name 
             });
@@ -120,7 +122,14 @@ export function configureRoomHandlers(io: Server, socket: Socket, sessionStore: 
                 fen: room.gameFen,
                 history: room.moveHistory,
                 status: room.gameStatus,
+                white: room.players.find(p => p.color === 'white')!.name, 
+                black: room.players.find(p => p.color === 'black')!.name 
             });
+        }
+        else {
+            console.log("===== FAILED TO START GAME =====")
+            console.log(room)
+            console.log("players length: ", room.players.length)
         }
     });
 
@@ -196,7 +205,7 @@ export function configureRoomHandlers(io: Server, socket: Socket, sessionStore: 
 
             // Emit playerJoined event to all players in the room
             io.to(roomId).emit('playerJoined', { 
-                roomId, 
+                roomId: roomId, 
                 players: room.players,
                 fen: room.gameFen,
                 history: room.moveHistory,

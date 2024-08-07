@@ -34,8 +34,10 @@ const GameRoom: React.FC = () => {
   const socket = useSocketStore(state => state.socket);
 
   const updateGameState = useCallback((fen: string, history: string[], status: 'waiting' | 'playing' | 'ended') => {
+
+      console.log("game state updated with fen:", fen)
       const newGame = new Chess(fen);
-      setGame(newGame);
+      setGame(()=>newGame);
       setMoveHistory(history);
       setGameStatus(status);
       setCanSwitchSides(status === 'waiting' && players.length === 2);
